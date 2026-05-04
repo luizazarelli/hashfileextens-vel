@@ -63,6 +63,7 @@ Hashfile createHashfile(char* path, size_t sizeStruct, int bucketSize) {
     h->path = strdup(path);
     h->file = fopen(path, "w+b");
     assert(h->file != NULL);
+    setvbuf(h->file, NULL, _IONBF, 0);
 
     // Preenche header
     h->header.magic      = MAGIC_NUMBER;
@@ -106,6 +107,7 @@ Hashfile openHashfile(char* path) {
         free(h);
         return NULL;
     }
+    setvbuf(h->file, NULL, _IONBF, 0);
 
     fread(&h->header, sizeof(HashHeader), 1, h->file);
     if (h->header.magic != MAGIC_NUMBER) {
@@ -146,7 +148,7 @@ void insertHashfile(Hashfile hf, char* chave, void* data) {
                 long slotOffset = currentOffset + sizeof(int) + sizeof(long) + (s * sizePerSlot);
                 fseek(h->file, slotOffset, SEEK_SET);
 
-                SlotHeader slotH;
+                SlotHeader slotH = {0};
                 fread(&slotH, sizeof(SlotHeader), 1, h->file);
 
                 if (!slotH.active) {
@@ -228,7 +230,7 @@ void* getHashfile(Hashfile hf, char* chave) {
                 long slotOffset = currentOffset + sizeof(int) + sizeof(long) + (s * sizePerSlot);
                 fseek(h->file, slotOffset, SEEK_SET);
                 
-                SlotHeader slotH;
+                SlotHeader slotH = {0};
                 fread(&slotH, sizeof(SlotHeader), 1, h->file);
 
                 if (slotH.active && strcmp(slotH.key, chave) == 0) {
@@ -266,7 +268,7 @@ bool removeHashfile(Hashfile hf, char* chave) {
                 long slotOffset = currentOffset + sizeof(int) + sizeof(long) + (s * sizePerSlot);
                 fseek(h->file, slotOffset, SEEK_SET);
                 
-                SlotHeader slotH;
+                SlotHeader slotH = {0};
                 fread(&slotH, sizeof(SlotHeader), 1, h->file);
 
                 if (slotH.active && strcmp(slotH.key, chave) == 0) {
@@ -316,7 +318,7 @@ void iterateHashfile(Hashfile hf, void (*callback)(char* key, void* data, void* 
                     long slotOffset = currentOffset + sizeof(int) + sizeof(long) + (s * sizePerSlot);
                     fseek(h->file, slotOffset, SEEK_SET);
                     
-                    SlotHeader slotH;
+                    SlotHeader slotH = {0};
                     fread(&slotH, sizeof(SlotHeader), 1, h->file);
 
                     if (slotH.active) {
@@ -386,7 +388,7 @@ void dumpHashfileTxt(Hashfile hf, char* txtPath) {
                 long slotOffset = currentOffset + sizeof(int) + sizeof(long) + (s * sizePerSlot);
                 fseek(h->file, slotOffset, SEEK_SET);
                 
-                SlotHeader slotH;
+                SlotHeader slotH = {0};
                 fread(&slotH, sizeof(SlotHeader), 1, h->file);
 
                 if (slotH.active) {
