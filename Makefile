@@ -74,8 +74,8 @@ tstall: t_list t_paths t_quadra t_habitante t_hashfile t_hash_extensivel t_syste
 VALGRIND = valgrind --leak-check=full --show-leak-kinds=all \
            --track-origins=yes --error-exitcode=1 -q
 
-BED = ../testes-t1
-BSD = ../saida_teste
+BED ?= ../testes-t1
+BSD ?= ../saida_teste
 
 valgrind: $(PROJECT)
 	@mkdir -p $(BSD)
