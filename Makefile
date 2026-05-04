@@ -74,10 +74,8 @@ tstall: t_list t_paths t_quadra t_habitante t_hashfile t_hash_extensivel t_syste
 VALGRIND = valgrind --leak-check=full --show-leak-kinds=all \
            --track-origins=yes --error-exitcode=1 -q
 
-BED  = ../testes-t1
-BSD  = ../saida_teste
-PASS = 0
-FAIL = 0
+BED = ../testes-t1
+BSD = ../saida_teste
 
 valgrind: $(PROJECT)
 	@mkdir -p $(BSD)
@@ -99,7 +97,13 @@ valgrind: $(PROJECT)
 
 # ─── Limpeza ─────────────────────────────────────────────────────────────────
 
+.PHONY: clean tstall test valgrind \
+        t_list t_paths t_quadra t_habitante t_hashfile t_hash_extensivel t_system
+
+test: tstall
+
 clean:
 	rm -f $(SRC)/*.o $(TST)/*.o $(UNITY)/*.o
 	rm -f $(SRC)/$(PROJECT)
 	rm -f $(TST)/t_hashfile $(TST)/t_hash_extensivel $(TST)/t_list $(TST)/t_paths $(TST)/t_quadra $(TST)/t_habitante $(TST)/t_system
+	rm -f *.bin

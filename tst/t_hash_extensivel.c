@@ -1,6 +1,7 @@
 #include "unity.h"
 #include "hash_extensivel.h"
 #include <stdio.h>
+#include <string.h>
 
 #define ARQ_DADOS "/tmp/t_he_dados.bin"
 #define ARQ_DIR   "/tmp/t_he_dir.bin"
@@ -94,6 +95,38 @@ void test_split_apos_bucket_cheio(void) {
     hash_extensivel_fechar(h);
 }
 
+/* chave duplicada deve atualizar o valor, nao gerar duplicata nem recursao infinita */
+void test_chave_duplicada_atualiza_valor(void) {
+    HashExtensivel* h = hash_extensivel_abrir(ARQ_DADOS, ARQ_DIR);
+    hash_extensivel_inserir(h, 42, "original");
+    hash_extensivel_inserir(h, 42, "atualizado");
+    char val[50];
+    TEST_ASSERT_TRUE(hash_extensivel_buscar(h, 42, val));
+    TEST_ASSERT_EQUAL_STRING("atualizado", val);
+    hash_extensivel_fechar(h);
+}
+
+/* carga alta: muitos splits, persistencia e leitura apos reabrir */
+void test_carga_alta_persistencia(void) {
+    HashExtensivel* h = hash_extensivel_abrir(ARQ_DADOS, ARQ_DIR);
+    for (int i = 0; i < 50; i++) {
+        char buf[50];
+        snprintf(buf, sizeof(buf), "val_%d", i);
+        TEST_ASSERT_TRUE(hash_extensivel_inserir(h, i, buf));
+    }
+    hash_extensivel_fechar(h);
+
+    h = hash_extensivel_abrir(ARQ_DADOS, ARQ_DIR);
+    TEST_ASSERT_NOT_NULL(h);
+    for (int i = 0; i < 50; i++) {
+        char esperado[50], obtido[50];
+        snprintf(esperado, sizeof(esperado), "val_%d", i);
+        TEST_ASSERT_TRUE(hash_extensivel_buscar(h, i, obtido));
+        TEST_ASSERT_EQUAL_STRING(esperado, obtido);
+    }
+    hash_extensivel_fechar(h);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_abrir_cria_novo);
@@ -104,5 +137,7 @@ int main(void) {
     RUN_TEST(test_remover_existente);
     RUN_TEST(test_remover_inexistente);
     RUN_TEST(test_split_apos_bucket_cheio);
+    RUN_TEST(test_chave_duplicada_atualiza_valor);
+    RUN_TEST(test_carga_alta_persistencia);
     return UNITY_END();
 }

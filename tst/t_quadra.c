@@ -52,8 +52,8 @@ void test_face_L(void) {
     Quadra q = createQuadra("t", 10.0, 20.0, 100.0, 60.0, NULL, NULL, NULL);
     double x, y;
     calcularEnderecoQuadra(q, 'L', 15.0, &x, &y);
-    TEST_ASSERT_EQUAL_FLOAT(10.0 + 100.0, x); 
-    TEST_ASSERT_EQUAL_FLOAT(20.0 + 15.0,  y); 
+    TEST_ASSERT_EQUAL_FLOAT(10.0 + 100.0, x);
+    TEST_ASSERT_EQUAL_FLOAT(20.0 + 15.0,  y);
     freeQuadra(q);
 }
 
@@ -61,8 +61,8 @@ void test_face_O(void) {
     Quadra q = createQuadra("t", 10.0, 20.0, 100.0, 60.0, NULL, NULL, NULL);
     double x, y;
     calcularEnderecoQuadra(q, 'O', 15.0, &x, &y);
-    TEST_ASSERT_EQUAL_FLOAT(10.0,        x); 
-    TEST_ASSERT_EQUAL_FLOAT(20.0 + 15.0, y); 
+    TEST_ASSERT_EQUAL_FLOAT(10.0 + 100.0, x);
+    TEST_ASSERT_EQUAL_FLOAT(20.0 + 15.0,  y);
     freeQuadra(q);
 }
 

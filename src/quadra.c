@@ -68,7 +68,7 @@ void calcularEnderecoQuadra(Quadra q, char face, double num, double* out_x, doub
             *out_y = q_info->y + num;
             break;
         case 'O':
-            *out_x = q_info->x;
+            *out_x = q_info->x + q_info->w;
             *out_y = q_info->y + num;
             break;
         default:

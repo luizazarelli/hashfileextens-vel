@@ -337,15 +337,30 @@ void iterateHashfile(Hashfile hf, void (*callback)(char* key, void* data, void* 
 void dumpHashfileTxt(Hashfile hf, char* txtPath) {
     if (!hf || !txtPath) return;
     hashfile_info* h = (hashfile_info*)hf;
-    
+
     FILE* out = fopen(txtPath, "w");
     if (!out) return;
+
+    /* pre-varredura: conta buckets de overflow (expansoes) */
+    int totalOverflow = 0;
+    for (int i = 0; i < h->header.capacity; i++) {
+        long off = calcBucketOffset(h, i);
+        long next;
+        fseek(h->file, off + sizeof(int), SEEK_SET);
+        fread(&next, sizeof(long), 1, h->file);
+        while (next != -1) {
+            totalOverflow++;
+            fseek(h->file, next + sizeof(int), SEEK_SET);
+            fread(&next, sizeof(long), 1, h->file);
+        }
+    }
 
     fprintf(out, "=== DUMP HASHFILE DINAMICO ===\n");
     fprintf(out, "Capacidade Primaria (Buckets): %d\n", h->header.capacity);
     fprintf(out, "Capacidade do Bucket (Slots): %d\n", h->header.bucketSize);
     fprintf(out, "Tamanho util do Slot (bytes): %zu\n", h->header.sizeStruct);
-    fprintf(out, "Total de Registros Ativos: %ld\n\n", h->header.numRecords);
+    fprintf(out, "Total de Registros Ativos: %ld\n", h->header.numRecords);
+    fprintf(out, "Total de Buckets de Overflow (Expansoes): %d\n\n", totalOverflow);
 
     long sizePerSlot = sizeof(SlotHeader) + h->header.sizeStruct;
 

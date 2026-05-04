@@ -8,3 +8,9 @@ tst/t_habitante
 tst/t_hashfile
 tst/t_hash_extensivel
 tst/t_system
+
+# arquivos gerados em tempo de execucao
+*.bin
+*.svg
+*.txt
+*.hf

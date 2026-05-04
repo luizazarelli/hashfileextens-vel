@@ -28,14 +28,22 @@ struct HashExtensivel {
     Diretorio dir;
 };
 
-static int h(int k) { return k; }
+/* hash de espalhamento: distribui os bits da chave uniformemente */
+static unsigned int h(int k) {
+    unsigned int uk = (unsigned int)k;
+    uk ^= uk >> 16;
+    uk *= 0x45d9f3bu;
+    uk ^= uk >> 16;
+    return uk;
+}
 
-static int calcula_indice(int k, int p) { 
-    return h(k) & ((1 << p) - 1); 
+/* usa os p bits menos significativos do hash como indice no diretorio */
+static int calcula_indice(int k, int p) {
+    return (int)(h(k) & ((1u << p) - 1u));
 }
 
 HashExtensivel* hash_extensivel_abrir(const char* caminho_dados, const char* caminho_dir) {
-    HashExtensivel* h_ext = (HashExtensivel*)malloc(sizeof(HashExtensivel));
+    HashExtensivel* h_ext = malloc(sizeof(HashExtensivel));
     if (!h_ext) return NULL;
 
     strncpy(h_ext->path_dir, caminho_dir, 255);
@@ -44,21 +52,41 @@ HashExtensivel* hash_extensivel_abrir(const char* caminho_dados, const char* cam
     FILE* f_ind = fopen(caminho_dir, "rb");
     if (f_ind) {
         h_ext->dados = fopen(caminho_dados, "rb+");
-        fread(&h_ext->dir.p_global, sizeof(int), 1, f_ind);
+        if (!h_ext->dados) {
+            fclose(f_ind);
+            free(h_ext);
+            return NULL;
+        }
+        fread(&h_ext->dir.p_global,   sizeof(int), 1, f_ind);
         fread(&h_ext->dir.n_entradas, sizeof(int), 1, f_ind);
-        h_ext->dir.enderecos = (long*)malloc(sizeof(long) * h_ext->dir.n_entradas);
+        h_ext->dir.enderecos = malloc(sizeof(long) * h_ext->dir.n_entradas);
+        if (!h_ext->dir.enderecos) {
+            fclose(f_ind);
+            fclose(h_ext->dados);
+            free(h_ext);
+            return NULL;
+        }
         fread(h_ext->dir.enderecos, sizeof(long), h_ext->dir.n_entradas, f_ind);
         fclose(f_ind);
     } else {
         h_ext->dados = fopen(caminho_dados, "wb+");
-        h_ext->dir.p_global = 0;
+        if (!h_ext->dados) {
+            free(h_ext);
+            return NULL;
+        }
+        h_ext->dir.p_global   = 0;
         h_ext->dir.n_entradas = 1;
-        h_ext->dir.enderecos = (long*)malloc(sizeof(long));
+        h_ext->dir.enderecos  = malloc(sizeof(long));
+        if (!h_ext->dir.enderecos) {
+            fclose(h_ext->dados);
+            free(h_ext);
+            return NULL;
+        }
         h_ext->dir.enderecos[0] = 0;
 
-        Bucket aux_b;
-        memset(&aux_b, 0, sizeof(Bucket));
-        fwrite(&aux_b, sizeof(Bucket), 1, h_ext->dados);
+        Bucket b;
+        memset(&b, 0, sizeof(Bucket));
+        fwrite(&b, sizeof(Bucket), 1, h_ext->dados);
     }
     return h_ext;
 }
@@ -66,50 +94,48 @@ HashExtensivel* hash_extensivel_abrir(const char* caminho_dados, const char* cam
 static void split(HashExtensivel* h_ext, int idx_split) {
     long off_velho = h_ext->dir.enderecos[idx_split];
     Bucket b_velha;
-    
     fseek(h_ext->dados, off_velho, SEEK_SET);
     fread(&b_velha, sizeof(Bucket), 1, h_ext->dados);
 
     if (b_velha.p_local == h_ext->dir.p_global) {
         int tam_atual = h_ext->dir.n_entradas;
         h_ext->dir.n_entradas *= 2;
-        h_ext->dir.enderecos = (long*)realloc(h_ext->dir.enderecos, sizeof(long) * h_ext->dir.n_entradas);
-        
-        for (int i = 0; i < tam_atual; i++) {
+        long* novo = realloc(h_ext->dir.enderecos,
+                             sizeof(long) * h_ext->dir.n_entradas);
+        if (!novo) return;
+        h_ext->dir.enderecos = novo;
+        for (int i = 0; i < tam_atual; i++)
             h_ext->dir.enderecos[i + tam_atual] = h_ext->dir.enderecos[i];
-        }
         h_ext->dir.p_global++;
     }
 
-    Bucket b_nova;
-    b_nova.p_local = b_velha.p_local + 1;
-    b_nova.ocupacao = 0;
     b_velha.p_local++;
+
+    Bucket b_nova;
+    memset(&b_nova, 0, sizeof(Bucket));
+    b_nova.p_local = b_velha.p_local;
 
     fseek(h_ext->dados, 0, SEEK_END);
     long off_novo = ftell(h_ext->dados);
     fwrite(&b_nova, sizeof(Bucket), 1, h_ext->dados);
 
-    int bit = 1 << (b_velha.p_local - 1);
+    /* redireciona entradas do diretorio cujo bit discriminante esta ligado */
+    unsigned int bit = 1u << (b_velha.p_local - 1);
     for (int i = 0; i < h_ext->dir.n_entradas; i++) {
-        if (h_ext->dir.enderecos[i] == off_velho) {
-            if ((i & bit) != 0) {
-                h_ext->dir.enderecos[i] = off_novo;
-            }
-        }
+        if (h_ext->dir.enderecos[i] == off_velho && ((unsigned int)i & bit) != 0u)
+            h_ext->dir.enderecos[i] = off_novo;
     }
 
-    Registro copia_itens[BUCKET_SIZE];
-    int n_itens = b_velha.ocupacao;
-    memcpy(copia_itens, b_velha.itens, sizeof(Registro) * n_itens);
-    
+    /* grava bucket antigo zerado e redistribui seus itens */
+    Registro copia[BUCKET_SIZE];
+    int n = b_velha.ocupacao;
+    memcpy(copia, b_velha.itens, sizeof(Registro) * n);
     b_velha.ocupacao = 0;
     fseek(h_ext->dados, off_velho, SEEK_SET);
     fwrite(&b_velha, sizeof(Bucket), 1, h_ext->dados);
 
-    for (int i = 0; i < n_itens; i++) {
-        hash_extensivel_inserir(h_ext, copia_itens[i].id, copia_itens[i].dado);
-    }
+    for (int i = 0; i < n; i++)
+        hash_extensivel_inserir(h_ext, copia[i].id, copia[i].dado);
 }
 
 bool hash_extensivel_inserir(HashExtensivel* h_ext, int chave, const char* valor) {
@@ -120,19 +146,29 @@ bool hash_extensivel_inserir(HashExtensivel* h_ext, int chave, const char* valor
     fseek(h_ext->dados, h_ext->dir.enderecos[pos], SEEK_SET);
     fread(&aux_b, sizeof(Bucket), 1, h_ext->dados);
 
+    /* atualiza valor se a chave ja existe (evita duplicatas e recursao infinita) */
+    for (int i = 0; i < aux_b.ocupacao; i++) {
+        if (aux_b.itens[i].id == chave) {
+            strncpy(aux_b.itens[i].dado, valor, 49);
+            aux_b.itens[i].dado[49] = '\0';
+            fseek(h_ext->dados, h_ext->dir.enderecos[pos], SEEK_SET);
+            fwrite(&aux_b, sizeof(Bucket), 1, h_ext->dados);
+            return true;
+        }
+    }
+
     if (aux_b.ocupacao < BUCKET_SIZE) {
         aux_b.itens[aux_b.ocupacao].id = chave;
         strncpy(aux_b.itens[aux_b.ocupacao].dado, valor, 49);
         aux_b.itens[aux_b.ocupacao].dado[49] = '\0';
         aux_b.ocupacao++;
-        
         fseek(h_ext->dados, h_ext->dir.enderecos[pos], SEEK_SET);
         fwrite(&aux_b, sizeof(Bucket), 1, h_ext->dados);
         return true;
-    } else {
-        split(h_ext, pos);
-        return hash_extensivel_inserir(h_ext, chave, valor); 
     }
+
+    split(h_ext, pos);
+    return hash_extensivel_inserir(h_ext, chave, valor);
 }
 
 bool hash_extensivel_buscar(HashExtensivel* h_ext, int chave, char* valor_out) {
@@ -173,16 +209,16 @@ bool hash_extensivel_remover(HashExtensivel* h_ext, int chave) {
 
 void hash_extensivel_fechar(HashExtensivel* h_ext) {
     if (!h_ext) return;
-    
-    FILE *f_dir = fopen(h_ext->path_dir, "wb");
+
+    FILE* f_dir = fopen(h_ext->path_dir, "wb");
     if (f_dir) {
-        fwrite(&h_ext->dir.p_global, sizeof(int), 1, f_dir);
-        fwrite(&h_ext->dir.n_entradas, sizeof(int), 1, f_dir);
-        fwrite(h_ext->dir.enderecos, sizeof(long), h_ext->dir.n_entradas, f_dir);
+        fwrite(&h_ext->dir.p_global,   sizeof(int),  1,                      f_dir);
+        fwrite(&h_ext->dir.n_entradas, sizeof(int),  1,                      f_dir);
+        fwrite(h_ext->dir.enderecos,   sizeof(long), h_ext->dir.n_entradas,  f_dir);
         fclose(f_dir);
     }
 
-    if (h_ext->dados) fclose(h_ext->dados);
+    if (h_ext->dados)         fclose(h_ext->dados);
     if (h_ext->dir.enderecos) free(h_ext->dir.enderecos);
     free(h_ext);
 }

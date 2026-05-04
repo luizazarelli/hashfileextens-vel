@@ -39,32 +39,29 @@ static void computeGeoBounds(const char* geoPath,
     fclose(geo);
 }
 
-/* Abre SVG com cabeçalho correto */
-static FILE* openSvgFmt(const char* path,
-                         double minX, double minY,
-                         double maxX, double maxY,
-                         double mL, double mT, double mR, double mB) {
-    FILE* svg = fopen(path, "w");
-    if (!svg) return NULL;
-    fprintf(svg, "<?xml version='1.0' encoding='utf-8'?>\n");
-    fprintf(svg, "<svg:svg xmlns:svg=\"http://www.w3.org/2000/svg\" "
-                 "viewBox=\"%.1f %.1f %.1f %.1f\">\n",
-            minX - mL, minY - mT,
-            (maxX - minX) + mL + mR,
-            (maxY - minY) + mT + mB);
-    return svg;
-}
-
 /* Escreve uma quadra no SVG (dentro de svg:g) */
 static void svgQuadra(FILE* svg,
                       const char* cep, double x, double y, double w, double h,
                       const char* cfill, const char* cstrk, const char* sw) {
     fprintf(svg,
         "   <svg:rect id=\"%s\" x=\"%lf\" y=\"%lf\" width=\"%lf\" height=\"%lf\" "
-        "fill=\"%s\" stroke=\"%s\" fill-opacity=\"0.8\" stroke-width=\"%s\" />\n\n",
+        "fill=\"%s\" stroke=\"%s\" fill-opacity=\"0.8\" stroke-width=\"%s\" />\r\n\r\n",
         cep, x, y, w, h, cfill, cstrk, sw);
     fprintf(svg,
-        "   <svg:text x=\"%lf\" y=\"%lf\" fill=\"%s\" stroke=\"black\" font-size=\"12\">%s</svg:text>\n",
+        "   <svg:text x=\"%lf\" y=\"%lf\" fill=\"%s\" stroke=\"black\" font-size=\"12\">%s</svg:text>\r\n",
+        x + 5.0, y + 9.0, cstrk, cep);
+}
+
+/* Escreve uma quadra no SVG base (formato gabarito, sem prefixo svg:) */
+static void svgQuadraPlain(FILE* svg,
+                            const char* cep, double x, double y, double w, double h,
+                            const char* cfill, const char* cstrk, const char* sw) {
+    fprintf(svg,
+        "   <rect id=\"%s\"  x=\"%lf\" y=\"%lf\" width=\"%lf\" height=\"%lf\" "
+        "fill=\"%s\" stroke=\"%s\" fill-opacity=\"0.8\" stroke-width=\"%s\"/>\r\n\r\n",
+        cep, x, y, w, h, cfill, cstrk, sw);
+    fprintf(svg,
+        "   <text  x=\"%lf\"  y=\"%lf\"   fill=\"%s\"  stroke=\"black\"  font-size=\"12\"  >%s</text>\r\n",
         x + 5.0, y + 9.0, cstrk, cep);
 }
 
@@ -197,15 +194,25 @@ void readPrintGeo(void* paths, void* hash_quadras) {
     double minX, minY, maxX, maxY;
     computeGeoBounds(geoPath, &minX, &minY, &maxX, &maxY);
 
-    /* Passo 2: SVG com cabeçalho correto */
-    FILE* svg = openSvgFmt(getBsdGeoSvg(paths),
-                            minX, minY, maxX, maxY,
-                            150.0, 115.0, 25.0, 15.0);
-    if (svg) fprintf(svg, "   <svg:g id=\"fig\">\n");
+    /* Passo 2: SVG com cabeçalho no formato gabarito */
+    FILE* svg = fopen(getBsdGeoSvg(paths), "w");
+    if (svg) {
+        if (minX < 150.0)
+            fprintf(svg,
+                "<svg viewBox=\"0 0 %.1f %.1f\"  "
+                "xmlns:xlink=\"http://www.w3.org/1999/xlink\" "
+                "xmlns=\"http://www.w3.org/2000/svg\" >\r\n",
+                maxX + 130.0, maxY + 130.0);
+        else
+            fprintf(svg,
+                "<svg xmlns:xlink=\"http://www.w3.org/1999/xlink\" "
+                "xmlns=\"http://www.w3.org/2000/svg\" >\r\n");
+        fprintf(svg, "<g id=\"fig\">\r\n");
+    }
 
     /* Passo 3: lê .geo, insere no hashfile e escreve SVG */
     FILE* geo = fopen(geoPath, "r");
-    if (!geo) { if (svg) { fprintf(svg, "   </svg:g></svg:svg>\n"); fclose(svg); } return; }
+    if (!geo) { if (svg) { fprintf(svg, "</g>\r\n</svg>"); fclose(svg); } return; }
 
     char linha[512];
     char sw[32] = "1.0px", cfill[32] = "red", cstrk[32] = "black";
@@ -224,14 +231,13 @@ void readPrintGeo(void* paths, void* hash_quadras) {
             insertHashfile(hash_quadras, cep, q);
             freeQuadra(q);
 
-            if (svg) svgQuadra(svg, cep, x, y, w, h, cfill, cstrk, sw);
+            if (svg) svgQuadraPlain(svg, cep, x, y, w, h, cfill, cstrk, sw);
         }
     }
     fclose(geo);
 
     if (svg) {
-        fprintf(svg, "   </svg:g>");
-        fprintf(svg, "</svg:svg>\n");
+        fprintf(svg, "</g>\r\n</svg>");
         fclose(svg);
     }
 }
@@ -349,10 +355,10 @@ static void censoCb(char* key, void* data, void* extra1, void* extra2) {
 static void svgAnnRect(FILE* svg, double x, double y, double w, double h,
                        const char* attrs, int* ann_count) {
     if ((*ann_count)++ == 0)
-        fprintf(svg, "<svg:rect width=\"%lf\" height=\"%lf\" x=\"%lf\" y=\"%lf\" %s />\n\n",
+        fprintf(svg, "<svg:rect width=\"%lf\" height=\"%lf\" x=\"%lf\" y=\"%lf\" %s />\r\n\r\n",
                 w, h, x, y, attrs);
     else
-        fprintf(svg, "   <svg:rect width=\"%lf\" height=\"%lf\" x=\"%lf\" y=\"%lf\" %s />\n\n",
+        fprintf(svg, "   <svg:rect width=\"%lf\" height=\"%lf\" x=\"%lf\" y=\"%lf\" %s />\r\n\r\n",
                 w, h, x, y, attrs);
 }
 
@@ -385,12 +391,12 @@ static void svgMudCircles(FILE* svg, double dx, double dy, const char* cpf,
         if ((*ann_count)++ == 0)
             fprintf(svg,
                 "<svg:circle cx=\"%lf\" cy=\"%lf\" r=\"%lf\" "
-                "stroke-opacity=\"0.5\" fill=\"none\" stroke=\"%s\" stroke-width=\"2\" />\n\n",
+                "stroke-opacity=\"0.5\" fill=\"none\" stroke=\"%s\" stroke-width=\"2\" />\r\n\r\n",
                 dx, dy, radii[i], colors[i]);
         else
             fprintf(svg,
                 "   <svg:circle cx=\"%lf\" cy=\"%lf\" r=\"%lf\" "
-                "stroke-opacity=\"0.5\" fill=\"none\" stroke=\"%s\" stroke-width=\"2\" />\n\n",
+                "stroke-opacity=\"0.5\" fill=\"none\" stroke=\"%s\" stroke-width=\"2\" />\r\n\r\n",
                 dx, dy, radii[i], colors[i]);
     }
 
@@ -403,11 +409,11 @@ static void svgMudCircles(FILE* svg, double dx, double dy, const char* cpf,
         ty = dy;
     }
     fprintf(svg,
-        "   <svg:text x=\"%lf\" y=\"%lf\" fill=\"red\" stroke=\"black\" font-size=\"10\">%s</svg:text>\n",
+        "   <svg:text x=\"%lf\" y=\"%lf\" fill=\"red\" stroke=\"black\" font-size=\"10\">%s</svg:text>\r\n",
         tx, ty, cpf);
     fprintf(svg,
         "   <svg:line x1=\"%lf\" y1=\"%lf\" x2=\"%lf\" y2=\"%lf\" "
-        "stroke=\"red\" stroke-width=\"2\" stroke-opacity=\"1.000000\" stroke-dasharray=\"5,5\" />\n",
+        "stroke=\"red\" stroke-width=\"2\" stroke-opacity=\"1.000000\" stroke-dasharray=\"5,5\" />\r\n",
         dx, dy, tx, ty);
 }
 
@@ -422,21 +428,21 @@ static void svgBadge(FILE* svg, int n, const char* fill, const char* txtfill,
         fprintf(svg,
             "<svg:rect width=\"100.000000\" height=\"50.000000\" x=\"%lf\" y=\"%lf\" "
             "fill=\"%s\" stroke=\"black\" stroke-width=\"1\" fill-opacity=\"1.000000\" "
-            "rx=\"20.000000\" ry=\"20.000000\" />\n\n",
+            "rx=\"20.000000\" ry=\"20.000000\" />\r\n\r\n",
             bx, by, fill);
     else
         fprintf(svg,
             "   <svg:rect width=\"100.000000\" height=\"50.000000\" x=\"%lf\" y=\"%lf\" "
             "fill=\"%s\" stroke=\"black\" stroke-width=\"1\" fill-opacity=\"1.000000\" "
-            "rx=\"20.000000\" ry=\"20.000000\" />\n\n",
+            "rx=\"20.000000\" ry=\"20.000000\" />\r\n\r\n",
             bx, by, fill);
     fprintf(svg,
         "   <svg:text x=\"%lf\" y=\"%lf\" fill=\"%s\" stroke=\"%s\" "
-        "font-size=\"14\" text-anchor=\"middle\">%s</svg:text>\n",
+        "font-size=\"14\" text-anchor=\"middle\">%s</svg:text>\r\n",
         cx, by + 12.0, txtfill, txtfill, label1);
     fprintf(svg,
         "   <svg:text x=\"%lf\" y=\"%lf\" fill=\"%s\" stroke=\"%s\" "
-        "font-size=\"9\" text-anchor=\"middle\">%s</svg:text>\n",
+        "font-size=\"9\" text-anchor=\"middle\">%s</svg:text>\r\n",
         cx, by + 28.0, txtfill, txtfill, label2);
 }
 
@@ -448,21 +454,21 @@ static void svgRqOverlay(FILE* svg, double bx, double by, double w, double h,
         fprintf(svg,
             "<svg:rect width=\"%lf\" height=\"%lf\" x=\"%lf\" y=\"%lf\" "
             "fill=\"white\" stroke=\"red\" stroke-width=\"1\" fill-opacity=\"0.500000\" "
-            "rx=\"0.000000\" ry=\"0.000000\" />\n\n",
+            "rx=\"0.000000\" ry=\"0.000000\" />\r\n\r\n",
             w, h, bx, by);
     else
         fprintf(svg,
             "   <svg:rect width=\"%lf\" height=\"%lf\" x=\"%lf\" y=\"%lf\" "
             "fill=\"white\" stroke=\"red\" stroke-width=\"1\" fill-opacity=\"0.500000\" "
-            "rx=\"0.000000\" ry=\"0.000000\" />\n\n",
+            "rx=\"0.000000\" ry=\"0.000000\" />\r\n\r\n",
             w, h, bx, by);
     fprintf(svg,
         "   <svg:line x1=\"%lf\" y1=\"%lf\" x2=\"%lf\" y2=\"%lf\" "
-        "stroke=\"red\" stroke-width=\"1\" stroke-opacity=\"0.500000\" />\n",
+        "stroke=\"red\" stroke-width=\"1\" stroke-opacity=\"0.500000\" />\r\n",
         bx, by, bx + w, by + h);
     fprintf(svg,
         "   <svg:line x1=\"%lf\" y1=\"%lf\" x2=\"%lf\" y2=\"%lf\" "
-        "stroke=\"red\" stroke-width=\"1\" stroke-opacity=\"0.500000\" />\n",
+        "stroke=\"red\" stroke-width=\"1\" stroke-opacity=\"0.500000\" />\r\n",
         bx, by + h, bx + w, by);
 }
 
@@ -633,7 +639,7 @@ static void handle_mud(const char* linha, QryCtx* ctx) {
                 calcularEnderecoQuadra(qDest, extractFace(face_str), num, &dx, &dy);
                 bool go_above;
                 if (ctx->right_side)
-                    go_above = (ctx->mud_idx == 0);
+                    go_above = (ctx->mud_idx == ctx->N_mud - 1);
                 else
                     go_above = (ctx->mud_idx > 0 && ctx->mud_idx < ctx->N_mud - 1);
                 svgMudCircles(ctx->svg, dx, dy, getHabitanteCpf(h),
@@ -683,11 +689,12 @@ typedef struct {
     int    N_mud, N_badges;
     double first_mud_x, max_mud_x, max_mud_y;
     bool   found_first;
+    char   first_face;
 } PrescanResult;
 
 static PrescanResult prescan_qry(FILE* qry, void* hash_quadras,
                                   double center_x, double minX, double minY) {
-    PrescanResult r = { 0, 0, center_x, minX, minY, false };
+    PrescanResult r = { 0, 0, center_x, minX, minY, false, 'N' };
     char linha[512];
     while (fgets(linha, sizeof(linha), qry)) {
         char cmd[32];
@@ -704,7 +711,7 @@ static PrescanResult prescan_qry(FILE* qry, void* hash_quadras,
             if (q2) {
                 double dx2, dy2;
                 calcularEnderecoQuadra(q2, extractFace(face2), num2, &dx2, &dy2);
-                if (!r.found_first) { r.first_mud_x = dx2; r.found_first = true; }
+                if (!r.found_first) { r.first_mud_x = dx2; r.first_face = extractFace(face2); r.found_first = true; }
                 if (dx2 > r.max_mud_x) r.max_mud_x = dx2;
                 if (dy2 > r.max_mud_y) r.max_mud_y = dy2;
                 freeQuadra(q2);
@@ -724,11 +731,11 @@ static void compute_viewbox(int N_mud, int N_badges, int N_above, int N_left,
     if (N_badges > 0) {
         *vbx = minX - 5.0; *vby = -5.0;
         int nb = (N_badges < 10) ? N_badges : 10;
-        *vbW = 1480.0 + (double)(nb - 1) * 110.0;
+        *vbW = (maxX - *vbx) + 140.0 + (double)(nb - 1) * 110.0;
         *vbH = maxY - *vby + 10.0;
     } else if (N_mud > 0) {
-        *vby = (N_above > 0) ? minY - 193.0 : minY - 5.0;
-        *vbx = (N_left  > 0) ? minX - 182.0 : minX - 5.0;
+        *vby = (N_above > 0) ? -((int)(max_mud_y / 35.0) + 30) : minY - 5.0;
+        *vbx = (N_left  > 0) ? -((int)(max_mud_x / 57.0) + 116) : minX - 5.0;
         double re = (max_mud_x + 12.5 > maxX) ? max_mud_x + 12.5 : maxX;
         double be = (max_mud_y + 12.5 > maxY) ? max_mud_y + 12.5 : maxY;
         *vbW = re + 10.0 - *vbx;
@@ -757,7 +764,8 @@ void readQry(void* paths, void* hash_quadras, void* hash_hab) {
     PrescanResult ps = prescan_qry(qry, hash_quadras, (minX + maxX) / 2.0, minX, minY);
 
     double city_cx = (minX + maxX) / 2.0;
-    bool right_side = (ps.first_mud_x > city_cx);
+    char ff = ps.first_face;
+    bool right_side = (ff == 'O') ? true : (ps.first_mud_x > city_cx);
     int N_above = 0, N_left = 0;
     if (ps.N_mud == 1) {
         if (right_side) N_above = 1; else N_left = 1;
@@ -773,10 +781,10 @@ void readQry(void* paths, void* hash_quadras, void* hash_hab) {
 
     FILE* svg = fopen(getBsdGeoQrySvg(paths), "w");
     if (svg) {
-        fprintf(svg, "<?xml version='1.0' encoding='utf-8'?>\n");
+        fprintf(svg, "<?xml version='1.0' encoding='utf-8'?>\r\n");
         fprintf(svg, "<svg:svg xmlns:svg=\"http://www.w3.org/2000/svg\" "
-                     "viewBox=\"%.1f %.1f %.1f %.1f\">\n", vbx, vby, vbW, vbH);
-        fprintf(svg, "   <svg:g id=\"fig\">\n");
+                     "viewBox=\"%.1f %.1f %.1f %.1f\">\r\n", vbx, vby, vbW, vbH);
+        fprintf(svg, "   <svg:g id=\"fig\">\r\n");
         replayGeo(svg, getBedGeo(paths));
         fprintf(svg, "</svg:g>");
     }
