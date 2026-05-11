@@ -61,7 +61,7 @@ void removerEnderecoHabitante(Habitante hab);
  */
 bool isMorador(Habitante hab);
 
-/* --- Getters pessoais: retornam os campos basicos do habitante --- */
+/* Getters pessoais: retornam os campos basicos do habitante */
 
 /* getHabitanteCpf: retorna o CPF do habitante. */
 char* getHabitanteCpf(Habitante h);
@@ -78,7 +78,7 @@ char getHabitanteSexo(Habitante h);
 /* getHabitanteNasc: retorna a data de nascimento. */
 char* getHabitanteNasc(Habitante h);
 
-/* --- Getters de endereco: validos somente se isMorador() == true --- */
+/* Getters de endereco: validos somente se isMorador() == true */
 
 /* getHabitanteEndCep: retorna o CEP da quadra onde mora. */
 char* getHabitanteEndCep(Habitante h);
